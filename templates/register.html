@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="max-w-md mx-auto mt-12 bg-white p-6 rounded shadow">
+    <h1 class="text-2xl font-semibold mb-4">Register</h1>
+    <form method="post" class="space-y-4">
+      {{ form.csrf_token }}
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Email</label>
+        {{ form.email(class_='mt-1 block w-full rounded border-gray-300 shadow-sm p-2', placeholder='you@example.com') }}
+        {% if form.email.errors %}
+          <p class="text-sm text-red-600">{{ form.email.errors[0] }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Password</label>
+        {{ form.password(class_='mt-1 block w-full rounded border-gray-300 shadow-sm p-2', placeholder='At least 6 characters') }}
+        {% if form.password.errors %}
+          <p class="text-sm text-red-600">{{ form.password.errors[0] }}</p>
+        {% endif %}
+      </div>
+
+      <div>
+        {{ form.submit(class_='w-full px-4 py-2 bg-green-600 text-white rounded') }}
+      </div>
+    </form>
+
+    <p class="mt-4 text-sm text-gray-600">Already have an account? <a href="{{ url_for('login') }}" class="text-blue-600 hover:underline">Login</a></p>
+  </div>
+{% endblock %}

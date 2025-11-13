@@ -1,0 +1,407 @@
+{% extends 'base.html' %}
+{% block content %}
+  <!-- Header -->
+  <div class="flex justify-between items-center mb-8">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">Students</h1>
+      <p class="mt-1 text-sm text-gray-500">Manage your student profiles and information</p>
+    </div>
+    <a href="{{ url_for('students_add') }}" 
+       class="px-4 py-2 bg-blue-700 text-white text-sm font-medium rounded-md hover:bg-blue-800 transition">
+      Add Student
+    </a>
+  </div>
+
+  <!-- Search and Filter Bar -->
+  <div class="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+    <div class="flex items-center gap-4">
+      <div class="flex-1">
+        <input type="text" id="searchInput" placeholder="Search by student name, mother's name, or contact..." 
+               class="w-full px-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-700 focus:border-transparent">
+      </div>
+      <div>
+        <select id="platformFilter" class="px-4 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-700 focus:border-transparent">
+          <option value="">All Platforms</option>
+          <option value="messenger">Messenger</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="none">No Platform</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {% if students %}
+    <!-- Results count -->
+    <div class="mb-3 text-sm text-gray-600">
+      <span id="resultsCount">{{ students|length }}</span> student(s)
+    </div>
+
+    <!-- Students Table -->
+    <div id="studentsTable" class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mother's Contact</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</th>
+            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {% for s in students %}
+            <tr class="student-row group hover:bg-gray-50 transition-colors cursor-pointer" 
+                onclick="window.location='{{ url_for('student_detail', student_id=s.id) }}'"
+                data-name="{{ s.first_name|lower }} {{ s.last_name|lower if s.last_name else '' }}"
+                data-mother="{{ s.mother_fullname|lower if s.mother_fullname else '' }}"
+                data-contact="{{ s.mother_contact|lower if s.mother_contact else '' }}"
+                data-platform="{{ s.mother_platform if s.mother_platform else 'none' }}">
+              
+              <!-- Student Name -->
+              <td class="px-6 py-4">
+                <div class="font-medium text-gray-900">{{ s.first_name }}{% if s.last_name %} {{ s.last_name }}{% endif %}</div>
+              </td>
+              
+              <!-- Mother's Contact -->
+              <td class="px-6 py-4">
+                <div class="text-sm text-gray-900">
+                  {{ s.mother_fullname or '—' }}
+                </div>
+                {% if s.mother_contact %}
+                  <div class="text-xs text-gray-500 mt-0.5">{{ s.mother_contact }}</div>
+                {% endif %}
+              </td>
+              
+              <!-- Platform -->
+              <td class="px-6 py-4">
+                {% if s.mother_platform == 'messenger' %}
+                  <span class="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                    Messenger
+                  </span>
+                {% elif s.mother_platform == 'whatsapp' %}
+                  <span class="inline-flex items-center px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-medium">
+                    WhatsApp
+                  </span>
+                {% else %}
+                  <span class="text-gray-400 text-sm">—</span>
+                {% endif %}
+              </td>
+              
+              <!-- Hourly Rate -->
+              <td class="px-6 py-4" onclick="event.stopPropagation();">
+                {% if s.hourly_rate %}
+                  <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded" 
+                        onclick="makeEditable(this, {{ s.id }}, 'hourly_rate', 'number')">
+                    €{{ "%.2f"|format(s.hourly_rate) }}/h
+                  </span>
+                {% else %}
+                  <span class="editable-field text-gray-400 text-sm cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded" 
+                        onclick="makeEditable(this, {{ s.id }}, 'hourly_rate', 'number')">
+                    Set rate
+                  </span>
+                {% endif %}
+              </td>
+              
+              <!-- Payment Method -->
+              <td class="px-6 py-4" onclick="event.stopPropagation();">
+                {% if s.payment_method %}
+                  <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                        onclick="makeEditableSelect(this, {{ s.id }}, 'payment_method', [
+                          {value: '', label: '—'},
+                          {value: 'cash', label: 'Cash'},
+                          {value: 'paypal', label: 'PayPal'},
+                          {value: 'bank', label: 'Bank Transfer'}
+                        ])">
+                    {% if s.payment_method == 'cash' %}Cash
+                    {% elif s.payment_method == 'paypal' %}PayPal
+                    {% elif s.payment_method == 'bank' %}Bank Transfer
+                    {% endif %}
+                  </span>
+                {% else %}
+                  <span class="editable-field text-gray-400 text-sm cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                        onclick="makeEditableSelect(this, {{ s.id }}, 'payment_method', [
+                          {value: '', label: '—'},
+                          {value: 'cash', label: 'Cash'},
+                          {value: 'paypal', label: 'PayPal'},
+                          {value: 'bank', label: 'Bank Transfer'}
+                        ])">
+                    Set payment
+                  </span>
+                {% endif %}
+              </td>
+              
+              <!-- Notes -->
+              <td class="px-6 py-4">
+                {% if s.notes %}
+                  <div class="text-xs text-gray-600 max-w-xs truncate" title="{{ s.notes }}">{{ s.notes }}</div>
+                {% else %}
+                  <span class="text-gray-400 text-sm">—</span>
+                {% endif %}
+              </td>
+              
+              <!-- Actions -->
+              <td class="px-6 py-4">
+                <div class="flex items-center justify-center gap-1">
+                  <button onclick="event.stopPropagation(); window.location='{{ url_for('student_detail', student_id=s.id) }}'" 
+                          class="p-1.5 text-gray-600 hover:text-blue-700 hover:bg-gray-100 rounded transition-colors"
+                          title="View details">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                    </svg>
+                  </button>
+                  <button onclick="event.stopPropagation(); confirmDeleteStudent({{ s.id }}, '{{ s.first_name }}{% if s.last_name %} {{ s.last_name }}{% endif %}')" 
+                          class="p-1.5 text-gray-600 hover:text-red-700 hover:bg-gray-100 rounded transition-colors"
+                          title="Delete student">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- No results message (hidden by default) -->
+    <div id="noResults" class="hidden text-center py-16">
+      <p class="text-gray-500">No students found</p>
+      <p class="text-sm text-gray-400 mt-2">Try adjusting your search or filters</p>
+    </div>
+  {% else %}
+    <div class="text-center py-16">
+      <p class="text-xl text-gray-600 mb-4">No students yet</p>
+      <a href="{{ url_for('students_add') }}" class="inline-block px-4 py-2 bg-blue-700 text-white text-sm font-medium rounded-md hover:bg-blue-800 transition">
+        Add Your First Student
+      </a>
+    </div>
+  {% endif %}
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    const platformFilter = document.getElementById('platformFilter');
+    const studentsTable = document.getElementById('studentsTable');
+    const noResults = document.getElementById('noResults');
+    const resultsCount = document.getElementById('resultsCount');
+
+    function filterStudents() {
+      const searchTerm = searchInput.value.toLowerCase();
+      const platformValue = platformFilter.value;
+      const rows = document.querySelectorAll('.student-row');
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const name = row.dataset.name;
+        const mother = row.dataset.mother;
+        const contact = row.dataset.contact;
+        const platform = row.dataset.platform;
+
+        const matchesSearch = searchTerm === '' || 
+                            name.includes(searchTerm) || 
+                            mother.includes(searchTerm) || 
+                            contact.includes(searchTerm);
+        
+        const matchesPlatform = platformValue === '' || platform === platformValue;
+
+        if (matchesSearch && matchesPlatform) {
+          row.classList.remove('hidden');
+          visibleCount++;
+        } else {
+          row.classList.add('hidden');
+        }
+      });
+
+      // Update results count and show/hide no results message
+      resultsCount.textContent = visibleCount;
+      if (visibleCount === 0) {
+        studentsTable.classList.add('hidden');
+        noResults.classList.remove('hidden');
+      } else {
+        studentsTable.classList.remove('hidden');
+        noResults.classList.add('hidden');
+      }
+    }
+
+    // Add event listeners
+    searchInput.addEventListener('input', filterStudents);
+    platformFilter.addEventListener('change', filterStudents);
+
+    // Delete student confirmation
+    function confirmDeleteStudent(studentId, studentName) {
+      if (confirm(`Are you sure you want to delete ${studentName}?\n\nThis will also delete all topics and photos.\n\nThis action cannot be undone!`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/students/${studentId}/delete`;
+        document.body.appendChild(form);
+        form.submit();
+      }
+    }
+
+    // Inline editing for text/number fields
+    function makeEditable(element, studentId, field, type) {
+      const currentValue = element.textContent.trim();
+      let actualValue = currentValue === '—' || currentValue === 'Set rate' ? '' : currentValue;
+      
+      // Extract numeric value for hourly_rate
+      if (field === 'hourly_rate' && actualValue !== '') {
+        actualValue = actualValue.replace('€', '').replace('/h', '').trim();
+      }
+      
+      const originalValue = actualValue; // Store original for comparison
+      
+      const input = document.createElement('input');
+      input.type = type;
+      input.value = actualValue;
+      input.className = 'w-20 px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-700';
+      
+      if (type === 'number') {
+        input.step = '0.01';
+        input.min = '0';
+      }
+      
+      element.replaceWith(input);
+      input.focus();
+      input.select();
+      
+      function save() {
+        const newValue = input.value.trim();
+        
+        // If value hasn't changed, just cancel
+        if (newValue === originalValue) {
+          cancel();
+          return;
+        }
+        
+        fetch(`/students/${studentId}/update`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({[field]: newValue || null})
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            // Update display
+            let displayValue = newValue || (field === 'hourly_rate' ? 'Set rate' : '—');
+            if (field === 'hourly_rate' && newValue) {
+              displayValue = `€${parseFloat(newValue).toFixed(2)}/h`;
+            }
+            element.textContent = displayValue;
+            
+            // Update classes based on whether value is set
+            if (newValue) {
+              element.classList.remove('text-gray-400');
+              element.classList.add('text-gray-900');
+            } else {
+              element.classList.remove('text-gray-900');
+              element.classList.add('text-gray-400');
+            }
+            
+            input.replaceWith(element);
+          } else {
+            alert('Error updating field');
+            input.replaceWith(element);
+          }
+        })
+        .catch(() => {
+          alert('Error updating field');
+          input.replaceWith(element);
+        });
+      }
+      
+      function cancel() {
+        input.replaceWith(element);
+      }
+      
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') save();
+        if (e.key === 'Escape') cancel();
+      });
+    }
+
+    // Inline editing for select fields
+    function makeEditableSelect(element, studentId, field, options) {
+      const currentValue = element.textContent.trim();
+      
+      // Map display text to value
+      let actualValue = '';
+      for (const opt of options) {
+        if (opt.label === currentValue) {
+          actualValue = opt.value;
+          break;
+        }
+      }
+      
+      const originalValue = actualValue; // Store original for comparison
+      
+      const select = document.createElement('select');
+      select.className = 'px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-700';
+      
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === actualValue) option.selected = true;
+        select.appendChild(option);
+      });
+      
+      element.replaceWith(select);
+      select.focus();
+      
+      function save() {
+        const newValue = select.value;
+        
+        // If value hasn't changed, just cancel
+        if (newValue === originalValue) {
+          cancel();
+          return;
+        }
+        
+        fetch(`/students/${studentId}/update`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({[field]: newValue || null})
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            const selectedOption = options.find(opt => opt.value === newValue);
+            element.textContent = selectedOption ? selectedOption.label : '—';
+            
+            // Update classes based on whether value is set
+            if (newValue) {
+              element.classList.remove('text-gray-400');
+              element.classList.add('text-gray-900');
+            } else {
+              element.classList.remove('text-gray-900');
+              element.classList.add('text-gray-400');
+            }
+            
+            select.replaceWith(element);
+          } else {
+            alert('Error updating field');
+            select.replaceWith(element);
+          }
+        })
+        .catch(() => {
+          alert('Error updating field');
+          select.replaceWith(element);
+        });
+      }
+      
+      function cancel() {
+        select.replaceWith(element);
+      }
+      
+      select.addEventListener('blur', save);
+      select.addEventListener('change', save);
+      select.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cancel();
+      });
+    }
+  </script>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="max-w-3xl mx-auto text-center mt-20">
+    <h1 class="text-4xl font-bold mb-4">Welcome to Ripetizioni Manager</h1>
+    <p class="mb-4">Manage your tutoring lessons, see a calendar, add and delete lessons and view reports.</p>
+    <div class="space-x-4">
+      <a href="{{ url_for('login') }}" class="px-4 py-2 bg-blue-600 text-white rounded">Login</a>
+      <a href="{{ url_for('register') }}" class="px-4 py-2 bg-gray-200 rounded">Register</a>
+    </div>
+    <p class="mt-6 text-sm text-gray-600">Tip: register an account and run <code>python init_db.py --email you@domain.com --password secret</code> if you haven't already.</p>
+  </div>
+{% endblock %}

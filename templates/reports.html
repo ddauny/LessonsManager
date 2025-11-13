@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1 class="text-2xl font-semibold mb-4">Reports</h1>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="bg-white p-4 rounded shadow">
+      <h3 class="font-medium mb-2">Hours per month</h3>
+      <canvas id="hoursChart" class="w-full" style="height:300px"></canvas>
+    </div>
+    <div class="bg-white p-4 rounded shadow">
+      <h3 class="font-medium mb-2">Revenue per month</h3>
+      <canvas id="revenueChart" class="w-full" style="height:300px"></canvas>
+    </div>
+  </div>
+
+  <script>
+    function pageInit(){
+      const labels = {{ labels|tojson }};
+      const hours = {{ hours|tojson }};
+      const revenue = {{ revenue|tojson }};
+
+      if(!labels || labels.length === 0){
+        const hParent = document.getElementById('hoursChart').parentNode;
+        const rParent = document.getElementById('revenueChart').parentNode;
+        if(hParent) hParent.innerHTML = '<div class="p-4 text-gray-600">No data available</div>';
+        if(rParent) rParent.innerHTML = '<div class="p-4 text-gray-600">No data available</div>';
+        return;
+      }
+
+      // create small charts - requires Chart.js loaded on page
+      try{
+        const ctxH = document.getElementById('hoursChart').getContext('2d');
+        new Chart(ctxH, {
+          type: 'line',
+          data: { labels: labels, datasets: [{ label: 'Hours', data: hours, borderColor: 'blue', fill: false }] }
+        });
+
+        const ctxR = document.getElementById('revenueChart').getContext('2d');
+        new Chart(ctxR, {
+          type: 'bar',
+          data: { labels: labels, datasets: [{ label: 'Revenue', data: revenue, backgroundColor: 'green' }] }
+        });
+      }catch(e){ console.error('Chart init error', e); }
+    }
+  // pageInit will be called by app.js on DOMContentLoaded so Chart.js is available
+  </script>
+{% endblock %}

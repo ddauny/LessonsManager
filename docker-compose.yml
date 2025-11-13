@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - '5001:5000'
+    volumes:
+      - ./instance:/app/instance
+      - ./static/uploads:/app/static/uploads
+    env_file:
+      - .env
+    restart: unless-stopped
+

@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+  <a data-ajax="true" href="{{ url_for('calendar_view', view=view, date=prev_date) }}" class="px-3 py-1 bg-gray-200 rounded">&larr;</a>
+      <div class="text-lg font-semibold">{{ current.strftime('%B %Y') if view=='month' else 'Week of ' + current.strftime('%Y-%m-%d') }}</div>
+      <a href="{{ url_for('calendar_view', view=view, date=next_date) }}" class="px-3 py-1 bg-gray-200 rounded">&rarr;</a>
+    </div>
+    <div class="flex items-center gap-2">
+  <a data-ajax="true" href="{{ url_for('calendar_view', view='month', date=current.isoformat()) }}" class="px-3 py-1 bg-blue-600 text-white rounded">Month</a>
+  <a data-ajax="true" href="{{ url_for('calendar_view', view='week', date=current.isoformat()) }}" class="px-3 py-1 bg-blue-600 text-white rounded">Week</a>
+    </div>
+  </div>
+
+  <div class="bg-white rounded shadow overflow-hidden">
+    <div class="grid grid-cols-7 bg-gray-100 text-sm font-medium">
+      <div class="p-2 text-center">Mon</div>
+      <div class="p-2 text-center">Tue</div>
+      <div class="p-2 text-center">Wed</div>
+      <div class="p-2 text-center">Thu</div>
+      <div class="p-2 text-center">Fri</div>
+      <div class="p-2 text-center">Sat</div>
+      <div class="p-2 text-center">Sun</div>
+    </div>
+
+    {% for week in weeks %}
+      <div class="grid grid-cols-7 border-t">
+        {% for day in week %}
+          {% set ds = day.isoformat() %}
+          <div class="p-3 h-36 border-r last:border-r-0 {% if day == today %}bg-yellow-50{% endif %}">
+            <div class="flex justify-between items-start">
+              <div class="text-sm font-medium">{{ day.day }}</div>
+              {% if grouped.get(ds) %}
+                <div class="text-xs bg-green-100 text-green-800 rounded-full px-2">{{ grouped[ds]|length }} lessons</div>
+              {% endif %}
+            </div>
+            <div class="mt-2 text-xs space-y-1 overflow-auto h-24">
+              {% for l in grouped.get(ds, []) %}
+                <div class="p-1 rounded text-xs {% if l.paid %}bg-green-50{% else %}bg-red-50{% endif %}">
+                  <strong>{{ l.start_datetime.strftime('%H:%M') }}</strong> {{ l.student_name }}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+
+{% endblock %}
+ 

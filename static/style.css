@@ -1,0 +1,65 @@
+/* Professional minimal styling */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: #111827;
+  background: #f9fafb;
+}
+
+/* Flash messages */
+.flashes {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 50;
+  max-width: 400px;
+}
+
+.flash {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  font-size: 14px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.flash.success {
+  background: #ecfdf5;
+  border-left: 4px solid #10b981;
+  color: #065f46;
+}
+
+.flash.danger {
+  background: #fef2f2;
+  border-left: 4px solid #ef4444;
+  color: #991b1b;
+}
+
+.flash.info {
+  background: #eff6ff;
+  border-left: 4px solid #3b82f6;
+  color: #1e40af;
+}
+
+/* Autocomplete */
+.autocomplete-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+  background: #f3f4f6;
+}
+
+.autocomplete-item .muted {
+  color: #6b7280;
+  font-size: 12px;
+}
+

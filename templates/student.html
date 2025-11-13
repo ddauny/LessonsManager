@@ -1,0 +1,413 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="mb-4 flex justify-between items-center">
+      <div>
+        <h1 class="text-xl font-bold text-gray-900">{{ student.first_name }}{% if student.last_name %} {{ student.last_name }}{% endif %}</h1>
+        <p class="text-xs text-gray-500">Student Profile</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="{{ url_for('students_list') }}" 
+           class="px-3 py-1.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition">
+          Back to Students
+        </a>
+        <button onclick="confirmDelete()" 
+                class="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition">
+          Delete Student
+        </button>
+      </div>
+    </div>
+
+    <!-- Info Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <!-- Contact Info Card -->
+      <div class="bg-white rounded-md border border-gray-200">
+        <div class="px-4 py-2 border-b border-gray-200">
+          <h3 class="text-xs font-medium text-gray-900 uppercase tracking-wider">Contact Information</h3>
+        </div>
+        <div class="px-4 py-3">
+          <dl class="space-y-2">
+            <!-- Mother's Name - Editable -->
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Mother's Name</dt>
+              <dd class="mt-0.5">
+                <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                      onclick="makeEditable(this, {{ student.id }}, 'mother_fullname', 'text')">
+                  {{ student.mother_fullname or '—' }}
+                </span>
+              </dd>
+            </div>
+            <!-- Platform - Editable -->
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</dt>
+              <dd class="mt-0.5">
+                <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                      onclick="makeEditableSelect(this, {{ student.id }}, 'mother_platform', [
+                        {value: '', label: '—'},
+                        {value: 'whatsapp', label: 'WhatsApp'},
+                        {value: 'messenger', label: 'Messenger'}
+                      ])">
+                  {% if student.mother_platform == 'messenger' %}
+                    Messenger
+                  {% elif student.mother_platform == 'whatsapp' %}
+                    WhatsApp
+                  {% else %}
+                    —
+                  {% endif %}
+                </span>
+              </dd>
+            </div>
+            <!-- Contact - Editable -->
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</dt>
+              <dd class="mt-0.5">
+                <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                      onclick="makeEditable(this, {{ student.id }}, 'mother_contact', 'text')">
+                  {{ student.mother_contact or '—' }}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <!-- Payment Info Card -->
+      <div class="bg-white rounded-md border border-gray-200">
+        <div class="px-4 py-2 border-b border-gray-200">
+          <h3 class="text-xs font-medium text-gray-900 uppercase tracking-wider">Payment Information</h3>
+        </div>
+        <div class="px-4 py-3">
+          <dl class="space-y-2">
+            <!-- Hourly Rate - Editable -->
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Hourly Rate</dt>
+              <dd class="mt-0.5">
+                <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                      onclick="makeEditable(this, {{ student.id }}, 'hourly_rate', 'number')">
+                  {% if student.hourly_rate %}
+                    €{{ "%.2f"|format(student.hourly_rate) }}/hour
+                  {% else %}
+                    —
+                  {% endif %}
+                </span>
+              </dd>
+            </div>
+            <!-- Payment Method - Editable -->
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Method</dt>
+              <dd class="mt-0.5">
+                <span class="editable-field text-sm text-gray-900 cursor-pointer hover:bg-gray-50 px-1 -mx-1 rounded"
+                      onclick="makeEditableSelect(this, {{ student.id }}, 'payment_method', [
+                        {value: '', label: '—'},
+                        {value: 'cash', label: 'Cash'},
+                        {value: 'paypal', label: 'PayPal'},
+                        {value: 'bank', label: 'Bank Transfer'}
+                      ])">
+                  {% if student.payment_method == 'cash' %}
+                    Cash
+                  {% elif student.payment_method == 'paypal' %}
+                    PayPal
+                  {% elif student.payment_method == 'bank' %}
+                    Bank Transfer
+                  {% else %}
+                    —
+                  {% endif %}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes Section -->
+    <div class="mb-4">
+      <div class="bg-white rounded-md border border-gray-200">
+        <div class="px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+          <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Notes</h3>
+          <button onclick="toggleNotesEdit()" id="editNotesBtn" class="px-2 py-1 text-xs border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition">
+            Edit
+          </button>
+        </div>
+        
+        <!-- Display mode -->
+        <div id="notesDisplay" class="px-4 py-3">
+          <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ student.notes or 'No notes' }}</p>
+        </div>
+        
+        <!-- Edit mode (hidden by default) -->
+        <div id="notesEdit" class="hidden px-4 py-3">
+          <form method="POST" action="{{ url_for('student_update_notes', student_id=student.id) }}">
+            <textarea name="notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-700 text-sm">{{ student.notes or '' }}</textarea>
+            <div class="flex gap-2 mt-2">
+              <button type="submit" class="px-3 py-1.5 text-xs bg-blue-700 text-white rounded-md hover:bg-blue-800 transition">
+                Save
+              </button>
+              <button type="button" onclick="toggleNotesEdit()" class="px-3 py-1.5 text-xs border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Topics Section -->
+    <div class="bg-white rounded-md border border-gray-200 mb-4">
+      <div class="px-4 py-2 border-b border-gray-200">
+        <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Topics</h3>
+      </div>
+      
+      <div class="px-4 py-3">
+        <!-- Add Topic Form -->
+        <form method="post" class="mb-4">
+          {{ topic_form.hidden_tag() }}
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-700 mb-1">Title</label>
+              {{ topic_form.title(class_='w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent', placeholder='Topic title') }}
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-700 mb-1">Description</label>
+              {{ topic_form.description(class_='w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent', placeholder='Description') }}
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700 mb-1">Lesson</label>
+              {{ topic_form.lesson_id(class_='w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-700 focus:border-transparent') }}
+            </div>
+          </div>
+          <div class="mt-2">
+            <button type="submit" class="px-3 py-1.5 bg-blue-700 text-white rounded-md hover:bg-blue-800 transition font-medium text-xs">
+              Add Topic
+            </button>
+          </div>
+        </form>
+
+        <!-- Topics List -->
+        {% if topics %}
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+            {% for t in topics %}
+              <div class="bg-gray-50 p-2 rounded-md border border-gray-200">
+                <h4 class="font-medium text-gray-900 text-xs mb-0.5">{{ t.title }}</h4>
+                {% if t.description %}
+                  <p class="text-gray-600 text-xs mb-1">{{ t.description }}</p>
+                {% endif %}
+                <p class="text-xs text-gray-500">{{ t.created_at.strftime('%d/%m/%Y') }}</p>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-center py-3 text-gray-500 text-xs">No topics yet</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Photos Section -->
+    <div class="bg-white rounded-md border border-gray-200">
+      <div class="px-4 py-2 border-b border-gray-200">
+        <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wider">Photos</h3>
+      </div>
+      
+      <div class="px-4 py-3">
+        <form method="POST" enctype="multipart/form-data" action="{{ url_for('student_upload_photo', student_id=student.id) }}" class="mb-4">
+          <div class="flex items-end gap-2">
+            <div class="flex-1">
+              <label for="photo-upload" class="block text-xs font-medium text-gray-700 mb-1">Upload Photo</label>
+              <div class="relative">
+                <input type="file" id="photo-upload" name="photo" accept="image/*" class="hidden">
+                <button type="button" onclick="document.getElementById('photo-upload').click()" class="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-md bg-white hover:bg-gray-50 transition text-left text-gray-700">
+                  <span id="file-name">Choose file...</span>
+                </button>
+              </div>
+            </div>
+            <button type="submit" class="px-3 py-1.5 bg-blue-700 text-white rounded-md hover:bg-blue-800 transition font-medium text-xs">
+              Upload
+            </button>
+          </div>
+        </form>
+
+        <!-- Photos Grid -->
+        {% if photos %}
+          <div class="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-2">
+            {% for p in photos %}
+              <a href="{{ url_for('static', filename='uploads/' + p.filename) }}" target="_blank" class="group relative rounded-md overflow-hidden border border-gray-200 hover:border-blue-700 transition aspect-square cursor-pointer">
+                <img src="{{ url_for('static', filename='uploads/' + p.filename) }}" alt="photo" class="w-full h-full object-cover group-hover:scale-105 transition">
+                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition flex items-center justify-center">
+                  <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path>
+                  </svg>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-center py-3 text-gray-500 text-xs">No photos yet</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden delete form -->
+  <form id="deleteForm" method="POST" action="{{ url_for('student_delete', student_id=student.id) }}" class="hidden">
+  </form>
+
+  <script>
+    // Update file name display when file is selected
+    document.getElementById('photo-upload').addEventListener('change', function(e) {
+      const fileName = e.target.files[0]?.name || 'Choose file...';
+      document.getElementById('file-name').textContent = fileName;
+    });
+
+    // Toggle notes edit mode
+    function toggleNotesEdit() {
+      const display = document.getElementById('notesDisplay');
+      const edit = document.getElementById('notesEdit');
+      const btn = document.getElementById('editNotesBtn');
+      
+      if (display.classList.contains('hidden')) {
+        // Switch to display mode
+        display.classList.remove('hidden');
+        edit.classList.add('hidden');
+        btn.textContent = 'Edit';
+      } else {
+        // Switch to edit mode
+        display.classList.add('hidden');
+        edit.classList.remove('hidden');
+        btn.textContent = 'View';
+      }
+    }
+
+    // Inline editing for text/number fields
+    function makeEditable(element, studentId, field, type) {
+      const currentValue = element.textContent.trim();
+      let actualValue = currentValue === '—' ? '' : currentValue;
+      
+      // Extract numeric value for hourly_rate
+      if (field === 'hourly_rate' && actualValue !== '') {
+        actualValue = actualValue.replace('€', '').replace('/hour', '').trim();
+      }
+      
+      const input = document.createElement('input');
+      input.type = type;
+      input.value = actualValue;
+      input.className = 'w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-700';
+      
+      if (type === 'number') {
+        input.step = '0.01';
+      }
+      
+      element.replaceWith(input);
+      input.focus();
+      input.select();
+      
+      function save() {
+        const newValue = input.value.trim();
+        
+        fetch(`/students/${studentId}/update`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({[field]: newValue || null})
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            let displayValue = newValue || '—';
+            if (field === 'hourly_rate' && newValue) {
+              displayValue = `€${parseFloat(newValue).toFixed(2)}/hour`;
+            }
+            element.textContent = displayValue;
+            input.replaceWith(element);
+          } else {
+            alert('Error updating field');
+            input.replaceWith(element);
+          }
+        })
+        .catch(() => {
+          alert('Error updating field');
+          input.replaceWith(element);
+        });
+      }
+      
+      function cancel() {
+        input.replaceWith(element);
+      }
+      
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') save();
+        if (e.key === 'Escape') cancel();
+      });
+    }
+
+    // Inline editing for select fields
+    function makeEditableSelect(element, studentId, field, options) {
+      const currentValue = element.textContent.trim();
+      
+      // Map display text to value
+      let actualValue = '';
+      for (const opt of options) {
+        if (opt.label === currentValue) {
+          actualValue = opt.value;
+          break;
+        }
+      }
+      
+      const select = document.createElement('select');
+      select.className = 'w-full px-2 py-1 border border-blue-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-700';
+      
+      options.forEach(opt => {
+        const option = document.createElement('option');
+        option.value = opt.value;
+        option.textContent = opt.label;
+        if (opt.value === actualValue) option.selected = true;
+        select.appendChild(option);
+      });
+      
+      element.replaceWith(select);
+      select.focus();
+      
+      function save() {
+        const newValue = select.value;
+        
+        fetch(`/students/${studentId}/update`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({[field]: newValue || null})
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            const selectedOption = options.find(opt => opt.value === newValue);
+            element.textContent = selectedOption ? selectedOption.label : '—';
+            select.replaceWith(element);
+          } else {
+            alert('Error updating field');
+            select.replaceWith(element);
+          }
+        })
+        .catch(() => {
+          alert('Error updating field');
+          select.replaceWith(element);
+        });
+      }
+      
+      function cancel() {
+        select.replaceWith(element);
+      }
+      
+      select.addEventListener('blur', save);
+      select.addEventListener('change', save);
+      select.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cancel();
+      });
+    }
+
+    // Confirm delete
+    function confirmDelete() {
+      if (confirm('Are you sure you want to delete this student?\n\nThis will also delete:\n- All topics\n- All photos\n\nThis action cannot be undone!')) {
+        document.getElementById('deleteForm').submit();
+      }
+    }
+  </script>
+{% endblock %}
