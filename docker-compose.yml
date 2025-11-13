@@ -8,6 +8,7 @@ services:
     volumes:
       - ./instance:/app/instance
       - ./static/uploads:/app/static/uploads
+      - ./templates:/app/templates
     env_file:
       - .env
     restart: unless-stopped
