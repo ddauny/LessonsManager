@@ -34,6 +34,7 @@ login_manager.login_view = 'login'
 from models import User, Lesson, Student, Topic, StudentPhoto
 from forms import StudentForm, TopicForm
 from werkzeug.utils import secure_filename
+import google_calendar
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -78,6 +79,36 @@ def ensure_schema():
                 if 'hourly_rate' not in cols:
                     print('Adding missing column student.hourly_rate (sqlite3)')
                     cur.execute("ALTER TABLE student ADD COLUMN hourly_rate FLOAT")
+                    con.commit()
+                
+                # Check lesson table for event_id
+                cur.execute("PRAGMA table_info('lesson')")
+                rows = cur.fetchall()
+                cols = [r[1] for r in rows]
+                if 'event_id' not in cols:
+                    print('Adding missing column lesson.event_id (sqlite3)')
+                    cur.execute("ALTER TABLE lesson ADD COLUMN event_id VARCHAR(255)")
+                    con.commit()
+                if 'already_paid' not in cols:
+                    print('Adding missing column lesson.already_paid (sqlite3)')
+                    cur.execute("ALTER TABLE lesson ADD COLUMN already_paid BOOLEAN DEFAULT 0")
+                    con.commit()
+                if 'hourly_rate' not in cols:
+                    print('Adding missing column lesson.hourly_rate (sqlite3)')
+                    cur.execute("ALTER TABLE lesson ADD COLUMN hourly_rate FLOAT")
+                    con.commit()
+                
+                # Check user table for google_credentials
+                cur.execute("PRAGMA table_info('user')")
+                rows = cur.fetchall()
+                cols = [r[1] for r in rows]
+                if 'google_credentials' not in cols:
+                    print('Adding missing column user.google_credentials (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN google_credentials TEXT")
+                    con.commit()
+                if 'google_channel' not in cols:
+                    print('Adding missing column user.google_channel (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN google_channel TEXT")
                     con.commit()
                 
                 cur.close()
@@ -371,33 +402,100 @@ def lessons_add():
         # if end crosses midnight, clamp to same day 23:59
         if end.date() != start.date():
             end = datetime(start.year, start.month, start.day, 23, 59)
-        lesson = Lesson(student_name=form.student_name.data,
+        
+        # Get student's current hourly_rate to save with the lesson
+        student_name = form.student_name.data
+        student = Student.query.filter(
+            (Student.first_name + ' ' + Student.last_name) == student_name
+        ).first()
+        hourly_rate = student.hourly_rate if (student and student.hourly_rate) else None
+        
+        lesson = Lesson(student_name=student_name,
                         start_datetime=start,
                         end_datetime=end,
-                        paid=False)
+                        paid=False,
+                        hourly_rate=hourly_rate)
         db.session.add(lesson)
         db.session.commit()
+        # Create Google Calendar event for the lesson if authorized
+        try:
+            summary = f"Lesson: {lesson.student_name}"
+            description = f"Lesson for {lesson.student_name}"
+            created = google_calendar.create_event(summary, lesson.start_datetime, lesson.end_datetime, description=description, user=current_user)
+            # store created event id on lesson for future sync/delete
+            if created and isinstance(created, dict) and created.get('id'):
+                lesson.event_id = created.get('id')
+                db.session.add(lesson)
+                db.session.commit()
+        except Exception as e:
+            print('Google Calendar create event error:', e)
         flash('Lesson added', 'success')
     else:
         flash('Invalid input', 'danger')
     return redirect(url_for('lessons_view'))
 
 
+@app.route('/lessons/<int:lesson_id>/add_to_calendar', methods=['POST'])
+@login_required
+def lessons_add_to_calendar(lesson_id):
+    lesson = Lesson.query.get_or_404(lesson_id)
+    try:
+        creds = google_calendar.load_credentials()
+        if not creds:
+            flash('Google Calendar not connected. Please connect first.', 'warning')
+            return redirect(url_for('lessons_view'))
+        summary = f"Lesson: {lesson.student_name}"
+        description = f"Lesson for {lesson.student_name} at {lesson.start_datetime.strftime('%Y-%m-%d %H:%M')}"
+        created = google_calendar.create_event(summary, lesson.start_datetime, lesson.end_datetime, description=description, user=current_user)
+        if created and isinstance(created, dict) and created.get('id'):
+            lesson.event_id = created.get('id')
+            db.session.add(lesson)
+            db.session.commit()
+        flash('Event created in Google Calendar', 'success')
+    except Exception as e:
+        flash(f'Error creating Google Calendar event: {e}', 'danger')
+    return redirect(url_for('lessons_view'))
+
+
+@app.route('/debug/create_test_event')
+def debug_create_test_event():
+    """Debug route: create a test event using saved credentials and return API response or error."""
+    try:
+        creds = google_calendar.load_credentials()
+        if not creds:
+            return jsonify({'error': 'no_credentials'}), 400
+        from datetime import datetime, timedelta
+        start = datetime.utcnow() + timedelta(minutes=2)
+        end = start + timedelta(minutes=30)
+        created = google_calendar.create_event('DEBUG EVENT', start, end, description='Debug event')
+        return jsonify({'created_id': created.get('id'), 'summary': created.get('summary')}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/lessons/edit/<int:lesson_id>', methods=['POST'])
 @login_required
 def lessons_edit(lesson_id):
     lesson = Lesson.query.get_or_404(lesson_id)
-    form = LessonForm()
-    if form.validate_on_submit():
-        start = form.start_datetime.data
-        dur = float(form.duration.data)
+    
+    # Get form data directly from request (already_paid not in form)
+    student_name = request.form.get('student_name')
+    start_datetime_str = request.form.get('start_datetime')
+    duration = request.form.get('duration')
+    already_paid = bool(request.form.get('already_paid'))
+    
+    if student_name and start_datetime_str and duration:
+        start = datetime.strptime(start_datetime_str, '%Y-%m-%dT%H:%M')
+        dur = float(duration)
         end = start + timedelta(hours=dur)
         if end.date() != start.date():
             end = datetime(start.year, start.month, start.day, 23, 59)
         
-        lesson.student_name = form.student_name.data
+        lesson.student_name = student_name
         lesson.start_datetime = start
         lesson.end_datetime = end
+        lesson.already_paid = already_paid
+        
         db.session.commit()
         flash('Lesson updated', 'success')
     else:
@@ -413,6 +511,107 @@ def lessons_delete(lesson_id):
     db.session.commit()
     flash('Lesson deleted', 'info')
     return redirect(url_for('lessons_view'))
+
+
+@app.route('/lessons/delete_multiple', methods=['POST'])
+@login_required
+def lessons_delete_multiple():
+    lesson_ids = request.form.getlist('lesson_ids')
+    if lesson_ids:
+        deleted_count = 0
+        for lesson_id in lesson_ids:
+            lesson = Lesson.query.get(int(lesson_id))
+            if lesson:
+                db.session.delete(lesson)
+                deleted_count += 1
+        db.session.commit()
+        flash(f'{deleted_count} lesson(s) deleted', 'info')
+    else:
+        flash('No lessons selected', 'warning')
+    return redirect(url_for('lessons_view'))
+
+
+@app.route('/lessons/mark_multiple_paid', methods=['POST'])
+@login_required
+def lessons_mark_multiple_paid():
+    """Mark multiple lessons as paid, grouped by student for FinTrack."""
+    data = request.get_json()
+    lesson_ids = data.get('lesson_ids', [])
+    
+    if not lesson_ids:
+        return jsonify({'success': False, 'message': 'No lessons selected'})
+    
+    # Get lessons and group by student
+    lessons = Lesson.query.filter(Lesson.id.in_(lesson_ids)).all()
+    
+    if not lessons:
+        return jsonify({'success': False, 'message': 'No valid lessons found'})
+    
+    # Group lessons by student name
+    lessons_by_student = {}
+    for lesson in lessons:
+        if lesson.paid:
+            continue  # Skip already paid lessons
+        
+        student_name = lesson.student_name
+        if student_name not in lessons_by_student:
+            lessons_by_student[student_name] = []
+        lessons_by_student[student_name].append(lesson)
+    
+    payment_date = datetime.utcnow()
+    fintrack_results = []
+    
+    # Mark all lessons as paid first
+    for lesson in lessons:
+        if not lesson.paid:
+            lesson.paid = True
+            lesson.paid_at = payment_date
+            db.session.add(lesson)
+    
+    db.session.commit()
+    
+    # Send grouped transactions to FinTrack (one per student)
+    for student_name, student_lessons in lessons_by_student.items():
+        # Skip if all lessons are already_paid
+        lessons_to_bill = [l for l in student_lessons if not l.already_paid]
+        
+        if not lessons_to_bill:
+            fintrack_results.append(f"{student_name}: Skipped (external payment)")
+            continue
+        
+        # Calculate total price for this student
+        total_price = sum(l.get_price() for l in lessons_to_bill)
+        
+        if total_price == 0:
+            fintrack_results.append(f"{student_name}: Skipped (no rate set)")
+            continue
+        
+        # Get payment method from first lesson's student
+        payment_method = lessons_to_bill[0].get_payment_method()
+        
+        # Create notes with lesson count and dates
+        lesson_count = len(lessons_to_bill)
+        date_range = f"{lessons_to_bill[0].start_datetime.strftime('%d/%m')} - {lessons_to_bill[-1].start_datetime.strftime('%d/%m/%Y')}" if len(lessons_to_bill) > 1 else lessons_to_bill[0].start_datetime.strftime('%d/%m/%Y')
+        notes = f"{student_name} - {lesson_count} lesson(s) ({date_range})"
+        
+        # Send to FinTrack
+        success = send_to_fintrack(
+            amount=total_price,
+            notes=notes,
+            payment_method=payment_method,
+            transaction_date=payment_date
+        )
+        
+        if success:
+            fintrack_results.append(f"{student_name}: €{total_price:.2f} synced to FinTrack")
+        else:
+            fintrack_results.append(f"{student_name}: €{total_price:.2f} (FinTrack sync failed)")
+    
+    # Build response message
+    total_lessons = len([l for l in lessons if not l.paid])
+    message = f"Marked {len(lessons)} lesson(s) as paid. " + "; ".join(fintrack_results)
+    
+    return jsonify({'success': True, 'message': message})
 
 
 @app.route('/lessons/toggle_paid/<int:lesson_id>', methods=['POST'])
@@ -436,43 +635,52 @@ def lessons_toggle_paid(lesson_id):
     
     # If lesson was just marked as PAID (changed from unpaid to paid)
     if not was_paid and lesson.paid:
-        # Send transaction to FinTrack with the exact payment date
-        notes = f"{lesson.student_name} - {lesson.start_datetime.strftime('%d/%m/%Y %H:%M')}"
-        price = lesson.get_price()
-        payment_method = lesson.get_payment_method()
-        
-        success = send_to_fintrack(
-            amount=price,
-            notes=notes,
-            payment_method=payment_method,
-            transaction_date=payment_date  # Pass the exact date we saved in paid_at
-        )
-        
-        if success:
-            flash('Lesson marked as paid and synced to FinTrack ✓', 'success')
+        # Only send to FinTrack if not already_paid
+        if not lesson.already_paid:
+            # Send transaction to FinTrack with the exact payment date
+            notes = f"{lesson.student_name} - {lesson.start_datetime.strftime('%d/%m/%Y %H:%M')}"
+            price = lesson.get_price()
+            payment_method = lesson.get_payment_method()
+            
+            success = send_to_fintrack(
+                amount=price,
+                notes=notes,
+                payment_method=payment_method,
+                transaction_date=payment_date  # Pass the exact date we saved in paid_at
+            )
+            
+            if success:
+                flash('Lesson marked as paid and synced to FinTrack ✓', 'success')
+            else:
+                flash('Lesson marked as paid (FinTrack sync failed)', 'warning')
         else:
-            flash('Lesson marked as paid (FinTrack sync failed)', 'warning')
+            # Already paid externally, don't send to FinTrack
+            flash('Lesson marked as paid (already paid externally, not sent to FinTrack)', 'info')
     
     # If lesson was just marked as UNPAID (changed from paid to unpaid)
     elif was_paid and not lesson.paid:
-        # Delete transaction from FinTrack using the SAME date we used when creating it
-        notes = f"{lesson.student_name} - {lesson.start_datetime.strftime('%d/%m/%Y %H:%M')}"
-        
-        # IMPORTANT: Use the saved payment_date (from paid_at before we cleared it)
-        # This ensures we delete using the EXACT same date that was sent to FinTrack
-        delete_date = payment_date if payment_date else lesson.start_datetime
-        
-        success = delete_from_fintrack(
-            lesson_date=delete_date,
-            notes=notes
-        )
-        
-        if success:
-            flash('Lesson marked as unpaid and removed from FinTrack', 'success')
+        # Only delete from FinTrack if not already_paid
+        if not lesson.already_paid:
+            # Delete transaction from FinTrack using the SAME date we used when creating it
+            notes = f"{lesson.student_name} - {lesson.start_datetime.strftime('%d/%m/%Y %H:%M')}"
+            
+            # IMPORTANT: Use the saved payment_date (from paid_at before we cleared it)
+            # This ensures we delete using the EXACT same date that was sent to FinTrack
+            delete_date = payment_date if payment_date else lesson.start_datetime
+            
+            success = delete_from_fintrack(
+                lesson_date=delete_date,
+                notes=notes
+            )
+            
+            if success:
+                flash('Lesson marked as unpaid and removed from FinTrack', 'success')
+            else:
+                # Don't show error to user - FinTrack delete is not critical
+                # The lesson is still marked as unpaid successfully
+                flash('Lesson marked as unpaid', 'info')
         else:
-            # Don't show error to user - FinTrack delete is not critical
-            # The lesson is still marked as unpaid successfully
-            flash('Lesson marked as unpaid', 'info')
+            flash('Lesson marked as unpaid (already paid externally)', 'info')
     
     else:
         flash('Lesson payment status updated', 'success')
@@ -615,9 +823,155 @@ def students_add():
                     notes=(form.notes.data or None))
         db.session.add(s)
         db.session.commit()
+        # Optionally create an event in Google Calendar if authorized and hourly_rate provided
+        try:
+            # This is a simple example: create an all-day event titled "New student: <name>".
+            from datetime import datetime, timedelta
+            creds = google_calendar.load_credentials()
+            if creds:
+                # Create a short event starting now + 1 minute, duration 30 minutes
+                start = datetime.utcnow() + timedelta(minutes=1)
+                end = start + timedelta(minutes=30)
+                summary = f"New student: {s.first_name} {s.last_name or ''}".strip()
+                google_calendar.create_event(summary, start, end, description=s.notes or None)
+        except Exception as e:
+            # Log but don't block user creation
+            print('Google Calendar event error:', e)
         flash('Student created', 'success')
         return redirect(url_for('students_list'))
     return render_template('student_edit.html', form=form)
+
+
+@app.route('/authorize_calendar')
+@login_required
+def authorize_calendar():
+    # Redirect user to Google's OAuth consent screen
+    redirect_uri = url_for('oauth2callback', _external=True)
+    try:
+        auth_url = google_calendar.get_authorize_url(redirect_uri)
+        return redirect(auth_url)
+    except Exception as e:
+        flash(f'Google authorization error: {e}', 'danger')
+        return redirect(url_for('students_list'))
+
+
+@app.route('/oauth2callback')
+def oauth2callback():
+    # Handle OAuth callback and exchange code for token
+    try:
+        redirect_uri = url_for('oauth2callback', _external=True)
+        full_url = request.url
+        creds = google_calendar.exchange_code_for_token(full_url, redirect_uri)
+        # If user logged in, save credentials to their account
+        if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
+            try:
+                google_calendar.save_credentials_for_user(creds, current_user)
+                # Set up webhook for calendar changes
+                try:
+                    webhook_url = url_for('google_webhook', _external=True)
+                    channel_info = google_calendar.watch_calendar(current_user, webhook_url)
+                    # Save channel info to user for renewal/stop
+                    import json as json_lib
+                    current_user.google_channel = json_lib.dumps(channel_info)
+                    db.session.add(current_user)
+                    db.session.commit()
+                    print(f"Webhook registered for user {current_user.id}: {channel_info}")
+                except Exception as e:
+                    print(f'Error setting up webhook: {e}')
+            except Exception as e:
+                print('Error saving google creds to user:', e)
+        else:
+            # fallback: save to instance file
+            try:
+                google_calendar.save_credentials(creds)
+            except Exception:
+                pass
+        flash('Google Calendar connected successfully', 'success')
+    except Exception as e:
+        flash(f'Google OAuth error: {e}', 'danger')
+    return redirect(url_for('students_list'))
+
+
+@app.route('/disconnect_calendar')
+@login_required
+def disconnect_calendar():
+    try:
+        # Stop webhook if active
+        if current_user.google_channel:
+            try:
+                import json as json_lib
+                channel_info = json_lib.loads(current_user.google_channel)
+                google_calendar.stop_channel(channel_info['id'], channel_info['resourceId'], current_user)
+            except Exception as e:
+                print(f'Error stopping channel: {e}')
+        current_user.google_credentials = None
+        current_user.google_channel = None
+        db.session.add(current_user)
+        db.session.commit()
+        flash('Disconnected Google Calendar for your account', 'success')
+    except Exception as e:
+        flash(f'Error disconnecting Google Calendar: {e}', 'danger')
+    return redirect(url_for('calendar_view'))
+
+
+@app.route('/google_webhook', methods=['POST'])
+def google_webhook():
+    """
+    Receive Google Calendar push notifications.
+    When calendar changes, Google sends POST here.
+    We sync changed events to our Lesson table.
+    """
+    # Verify headers sent by Google
+    channel_id = request.headers.get('X-Goog-Channel-ID')
+    resource_state = request.headers.get('X-Goog-Resource-State')
+    
+    print(f'Webhook received: channel={channel_id}, state={resource_state}')
+    
+    # Ignore 'sync' state (initial handshake)
+    if resource_state == 'sync':
+        return '', 200
+    
+    if not channel_id:
+        print('Webhook missing channel ID')
+        return '', 400
+    
+    # Find user with matching channel_id
+    users = User.query.filter(User.google_channel.isnot(None)).all()
+    user_found = None
+    
+    import json as json_lib
+    for u in users:
+        try:
+            channel_info = json_lib.loads(u.google_channel)
+            if channel_info.get('id') == channel_id:
+                user_found = u
+                break
+        except:
+            continue
+    
+    if not user_found:
+        print(f'No user found for channel {channel_id}')
+        return '', 404
+    
+    # Sync calendar for this user
+    import sync_calendar
+    sync_calendar.sync_user_calendar(user_found)
+    
+    return '', 200
+
+
+@app.route('/sync_calendar_manual')
+@login_required
+def sync_calendar_manual():
+    """Manual sync trigger for testing/debugging."""
+    if not current_user.google_credentials:
+        flash('Google Calendar not connected', 'warning')
+        return redirect(url_for('calendar_view'))
+    
+    import sync_calendar
+    count = sync_calendar.sync_user_calendar(current_user)
+    flash(f'Synced {count} events from Google Calendar', 'success')
+    return redirect(url_for('calendar_view'))
 
 
 @app.route('/students/<int:student_id>', methods=['GET', 'POST'])
@@ -790,5 +1144,9 @@ if __name__ == '__main__':
                 conn.close()
             except Exception:
                 pass
+    
+    # Start webhook renewal scheduler
+    import webhook_scheduler
+    webhook_scheduler.setup_scheduler(app)
 
     app.run(debug=True, host='0.0.0.0')

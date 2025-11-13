@@ -10,6 +10,10 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(255), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     api_token = db.Column(db.String(128), unique=True, index=True)
+    # JSON serialized Google credentials for per-user calendar integration
+    google_credentials = db.Column(db.Text, nullable=True)
+    # Google Calendar webhook channel info (JSON: {id, resourceId, expiration})
+    google_channel = db.Column(db.Text, nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -29,6 +33,9 @@ class Lesson(db.Model):
     end_datetime = db.Column(db.DateTime, nullable=False)
     paid = db.Column(db.Boolean, default=False)
     paid_at = db.Column(db.DateTime, nullable=True)  # When the lesson was marked as paid
+    event_id = db.Column(db.String(255), nullable=True)  # Google Calendar event id
+    already_paid = db.Column(db.Boolean, default=False)  # If True, skip FinTrack when marking as paid
+    hourly_rate = db.Column(db.Float, nullable=True)  # Hourly rate at time of lesson creation (historical price)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def duration_hours(self):
@@ -41,7 +48,12 @@ class Lesson(db.Model):
         ).first()
     
     def get_price(self):
-        """Get the price for this lesson from the student's hourly rate."""
+        """Get the price for this lesson from the lesson's hourly rate or student's hourly rate."""
+        # Use lesson's hourly_rate if set (historical price at time of creation)
+        if self.hourly_rate is not None:
+            return self.hourly_rate * self.duration_hours()
+        
+        # Fallback to student's current hourly_rate (for old lessons without hourly_rate)
         student = self.get_student()
         if student and student.hourly_rate:
             return student.hourly_rate * self.duration_hours()

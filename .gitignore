@@ -2,3 +2,5 @@
 .venv
 /static/uploads/
 instance/ripetizioni.db
+/instance
+GOOGLE_SYNC_SETUP.md

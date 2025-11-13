@@ -124,3 +124,18 @@ function initStudentAutocomplete(){
 document.addEventListener('DOMContentLoaded', initStudentAutocomplete);
 // If a page defines a pageInit function (for charts/widgets), call it on full page load as well
 document.addEventListener('DOMContentLoaded', function(){ try{ if(window.pageInit && typeof window.pageInit === 'function') window.pageInit(); }catch(e){ console.error('pageInit error', e); } });
+
+// Toggle dropdown menu for Google Calendar
+function toggleCalendarMenu() {
+  const menu = document.getElementById('calendarMenu');
+  menu.classList.toggle('hidden');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+  const menu = document.getElementById('calendarMenu');
+  const button = event.target.closest('button[onclick="toggleCalendarMenu()"]');
+  if (menu && !menu.contains(event.target) && !button) {
+    menu.classList.add('hidden');
+  }
+});
