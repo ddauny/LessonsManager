@@ -6,6 +6,7 @@ import os
 import secrets
 import requests
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Load environment variables from .env file
 load_dotenv()
@@ -14,6 +15,10 @@ from forms import LoginForm, RegisterForm, LessonForm
 
 # Application setup
 app = Flask(__name__)
+
+# Trust Cloudflare Tunnel proxy headers for HTTPS detection
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET') or secrets.token_hex(32)
 # Use absolute path for SQLite database
 basedir = os.path.abspath(os.path.dirname(__file__))
