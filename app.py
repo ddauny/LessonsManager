@@ -20,6 +20,8 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET') or secrets.token_hex(32)
+app.config['SERVER_NAME'] = os.environ.get('SERVER_NAME')
+app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
 # Use absolute path for SQLite database
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "instance", "ripetizioni.db")}'
