@@ -623,17 +623,18 @@ def lessons_delete(lesson_id):
 @login_required
 def lessons_delete_multiple():
     lesson_ids = request.form.getlist('lesson_ids')
-    if lesson_ids:
-        deleted_count = 0
-        for lesson_id in lesson_ids:
-            lesson = Lesson.query.get(int(lesson_id))
-            if lesson:
-                db.session.delete(lesson)
-                deleted_count += 1
-        db.session.commit()
-        flash(f'{deleted_count} lesson(s) deleted', 'info')
-    else:
+    if not lesson_ids:
         flash('No lessons selected', 'warning')
+        return redirect(url_for('lessons_view'))
+    
+    deleted_count = 0
+    for lesson_id in lesson_ids:
+        lesson = Lesson.query.get(int(lesson_id))
+        if lesson:
+            db.session.delete(lesson)
+            deleted_count += 1
+    db.session.commit()
+    flash(f'{deleted_count} lesson(s) deleted', 'info')
     return redirect(url_for('lessons_view'))
 
 
@@ -705,7 +706,8 @@ def lessons_mark_multiple_paid():
             amount=total_price,
             notes=notes,
             payment_method=payment_method,
-            transaction_date=payment_date
+            transaction_date=payment_date,
+            user=current_user
         )
         
         if success:
@@ -752,7 +754,8 @@ def lessons_toggle_paid(lesson_id):
                 amount=price,
                 notes=notes,
                 payment_method=payment_method,
-                transaction_date=payment_date  # Pass the exact date we saved in paid_at
+                transaction_date=payment_date,
+                user=current_user
             )
             
             if success:
