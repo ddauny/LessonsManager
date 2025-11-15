@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, DateTimeField, DecimalField, SubmitField, SelectField
-from wtforms.validators import DataRequired, Email, Length
+from wtforms import StringField, PasswordField, BooleanField, DateTimeField, DecimalField, SubmitField, SelectField, IntegerField
+from wtforms.validators import DataRequired, Email, Length, Optional
 
 
 class LoginForm(FlaskForm):
@@ -13,6 +13,19 @@ class RegisterForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
     submit = SubmitField('Register')
+
+
+class ProfileForm(FlaskForm):
+    first_name = StringField('First Name', validators=[Optional()])
+    last_name = StringField('Last Name', validators=[Optional()])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    current_password = PasswordField('Current Password (required to save changes)', validators=[Optional()])
+    new_password = PasswordField('New Password (leave empty to keep current)', validators=[Optional(), Length(min=6)])
+    confirm_password = PasswordField('Confirm New Password', validators=[Optional()])
+    # FinTrack integration
+    fintrack_token = StringField('FinTrack JWT Token', validators=[Optional()])
+    fintrack_account_id = IntegerField('FinTrack Account ID', validators=[Optional()])
+    submit = SubmitField('Save Profile')
 
 
 class LessonForm(FlaskForm):

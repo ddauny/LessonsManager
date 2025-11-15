@@ -14,6 +14,12 @@ class User(db.Model, UserMixin):
     google_credentials = db.Column(db.Text, nullable=True)
     # Google Calendar webhook channel info (JSON: {id, resourceId, expiration})
     google_channel = db.Column(db.Text, nullable=True)
+    # User profile
+    first_name = db.Column(db.String(100), nullable=True)
+    last_name = db.Column(db.String(100), nullable=True)
+    # FinTrack integration (per-user)
+    fintrack_token = db.Column(db.Text, nullable=True)  # JWT token
+    fintrack_account_id = db.Column(db.Integer, nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

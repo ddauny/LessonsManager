@@ -118,6 +118,22 @@ def ensure_schema():
                     print('Adding missing column user.google_channel (sqlite3)')
                     cur.execute("ALTER TABLE user ADD COLUMN google_channel TEXT")
                     con.commit()
+                if 'first_name' not in cols:
+                    print('Adding missing column user.first_name (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN first_name VARCHAR(100)")
+                    con.commit()
+                if 'last_name' not in cols:
+                    print('Adding missing column user.last_name (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN last_name VARCHAR(100)")
+                    con.commit()
+                if 'fintrack_token' not in cols:
+                    print('Adding missing column user.fintrack_token (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN fintrack_token TEXT")
+                    con.commit()
+                if 'fintrack_account_id' not in cols:
+                    print('Adding missing column user.fintrack_account_id (sqlite3)')
+                    cur.execute("ALTER TABLE user ADD COLUMN fintrack_account_id INTEGER")
+                    con.commit()
                 
                 cur.close()
                 con.close()
@@ -129,7 +145,7 @@ def ensure_schema():
 ensure_schema()
 
 
-def send_to_fintrack(amount: float, notes: str, payment_method: str = None, transaction_date: datetime = None) -> bool:
+def send_to_fintrack(amount: float, notes: str, payment_method: str = None, transaction_date: datetime = None, user=None) -> bool:
     """
     Send a transaction to FinTrack when a lesson is marked as paid.
     Returns True if successful, False otherwise.
@@ -139,23 +155,31 @@ def send_to_fintrack(amount: float, notes: str, payment_method: str = None, tran
         notes: Transaction notes
         payment_method: Optional payment method (cash/paypal/bank)
         transaction_date: The date when the transaction was marked as paid (uses current date if not provided)
+        user: User object (uses current_user if not provided)
     """
-    # Skip if FinTrack is not configured
-    if not app.config['FINTRACK_TOKEN'] or not app.config['FINTRACK_ACCOUNT_ID']:
-        print('FinTrack not configured, skipping transaction sync')
+    # Use provided user or current_user
+    if user is None:
+        user = current_user
+    
+    # Get FinTrack URL from app config (global for all users)
+    fintrack_url = app.config.get('FINTRACK_URL')
+    
+    # Skip if FinTrack is not configured for this user or globally
+    if not fintrack_url or not user.fintrack_token or not user.fintrack_account_id:
+        print(f'FinTrack not configured for user {user.email}, skipping transaction sync')
         return False
     
-    url = f"{app.config['FINTRACK_URL']}/api/transactions/addTransactionFromShortcut"
+    url = f"{fintrack_url}/api/transactions/addTransactionFromShortcut"
     headers = {
-        'Authorization': f"Bearer {app.config['FINTRACK_TOKEN']}",
+        'Authorization': f"Bearer {user.fintrack_token}",
         'Content-Type': 'application/json'
     }
     
     # Convert accountId to integer
     try:
-        account_id = int(app.config['FINTRACK_ACCOUNT_ID'])
+        account_id = int(user.fintrack_account_id)
     except (ValueError, TypeError):
-        print(f'✗ Invalid FINTRACK_ACCOUNT_ID: must be a number')
+        print(f'✗ Invalid fintrack_account_id for user {user.email}: must be a number')
         return False
     
     # Use provided date or current date
@@ -168,7 +192,7 @@ def send_to_fintrack(amount: float, notes: str, payment_method: str = None, tran
         'amount': abs(amount),  # Ensure positive
         'type': 'Income',  # Lesson payments are income
         'categoryName': 'Ripetizioni',  # Category for lesson payments
-        'notes': notes if notes else 'Lesson payment from Ripetizioni',
+        'notes': notes if notes else 'Lesson payment from Lessons Manager',
         'date': transaction_date.strftime('%Y-%m-%d')  # IMPORTANT: Use the exact payment date
     }
     
@@ -178,30 +202,37 @@ def send_to_fintrack(amount: float, notes: str, payment_method: str = None, tran
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=5)
         if response.status_code in [200, 201]:
-            print(f'✓ Transaction sent to FinTrack: €{amount} on {transaction_date.strftime("%Y-%m-%d")}')
+            print(f'✓ Transaction sent to FinTrack for {user.email}: €{amount} on {transaction_date.strftime("%Y-%m-%d")}')
             return True
         else:
-            print(f'✗ FinTrack error {response.status_code}: {response.text}')
+            print(f'✗ FinTrack error {response.status_code} for {user.email}: {response.text}')
             return False
     except requests.exceptions.RequestException as e:
-        print(f'✗ FinTrack request failed: {e}')
+        print(f'✗ FinTrack request failed for {user.email}: {e}')
         return False
 
 
-def delete_from_fintrack(lesson_date: datetime, notes: str) -> bool:
+def delete_from_fintrack(lesson_date: datetime, notes: str, user=None) -> bool:
     """
     Delete a transaction from FinTrack when a lesson is marked as unpaid.
     This is a best-effort operation - if it fails, we don't prevent the lesson update.
     Returns True if successful, False otherwise.
     """
-    # Skip if FinTrack is not configured
-    if not app.config['FINTRACK_TOKEN']:
-        print('FinTrack not configured, skipping transaction delete')
+    # Use provided user or current_user
+    if user is None:
+        user = current_user
+    
+    # Get FinTrack URL from app config (global for all users)
+    fintrack_url = app.config.get('FINTRACK_URL')
+    
+    # Skip if FinTrack is not configured for this user or globally
+    if not fintrack_url or not user.fintrack_token:
+        print(f'FinTrack not configured for user {user.email}, skipping transaction delete')
         return False
     
-    url = f"{app.config['FINTRACK_URL']}/api/transactions/delete-by-details"
+    url = f"{fintrack_url}/api/transactions/delete-by-details"
     headers = {
-        'Authorization': f"Bearer {app.config['FINTRACK_TOKEN']}",
+        'Authorization': f"Bearer {user.fintrack_token}",
         'Content-Type': 'application/json'
     }
     
@@ -312,6 +343,52 @@ def logout():
     logout_user()
     flash('Logged out', 'info')
     return redirect(url_for('login'))
+
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    from forms import ProfileForm
+    form = ProfileForm()
+    
+    if request.method == 'GET':
+        # Pre-fill form with current user data
+        form.first_name.data = current_user.first_name
+        form.last_name.data = current_user.last_name
+        form.email.data = current_user.email
+        form.fintrack_token.data = current_user.fintrack_token
+        form.fintrack_account_id.data = current_user.fintrack_account_id
+    
+    if form.validate_on_submit():
+        # Verify current password if provided
+        if form.current_password.data:
+            if not current_user.check_password(form.current_password.data):
+                flash('Current password is incorrect', 'danger')
+                return render_template('profile.html', form=form)
+            
+            # Update profile
+            current_user.first_name = form.first_name.data.strip() if form.first_name.data else None
+            current_user.last_name = form.last_name.data.strip() if form.last_name.data else None
+            current_user.email = form.email.data.strip()
+            
+            # Update password if new password provided
+            if form.new_password.data:
+                if form.new_password.data != form.confirm_password.data:
+                    flash('New passwords do not match', 'danger')
+                    return render_template('profile.html', form=form)
+                current_user.set_password(form.new_password.data)
+            
+            # Update FinTrack settings
+            current_user.fintrack_token = form.fintrack_token.data.strip() if form.fintrack_token.data else None
+            current_user.fintrack_account_id = form.fintrack_account_id.data if form.fintrack_account_id.data else None
+            
+            db.session.commit()
+            flash('Profile updated successfully', 'success')
+            return redirect(url_for('profile'))
+        else:
+            flash('Please enter your current password to save changes', 'warning')
+    
+    return render_template('profile.html', form=form)
 
 
 @app.route('/calendar')
