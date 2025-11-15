@@ -1,25 +1,39 @@
-# Ripetizioni Manager
+# Lessons Manager
 
-Simple Flask app to manage tutoring lessons (lessons, calendar, reports) with authentication and token-protected API endpoints for automation.
+Flask application to manage tutoring lessons with Google Calendar integration, student tracking, payment management, and automated expense sync with FinTrack.
 
-## Features
+## ✨ Features
 
-- 📅 Calendar view of all lessons
-- 👨‍🎓 Student management with photos, topics, and contact information
-- 💰 Payment tracking with multiple payment methods (cash, PayPal, bank transfer)
-- 📊 Revenue reports and charts
-- 🔗 **FinTrack Integration**: Automatically sync paid lessons to your FinTrack expense tracker
+- 📅 **Calendar View**: Month/week view of all lessons
+- 👨‍🎓 **Student Management**: Photos, topics, contact information, and hourly rates
+- 💰 **Payment Tracking**: Multiple payment methods (cash, PayPal, bank transfer)
+- 📊 **Revenue Reports**: Charts and financial analytics
+- 🔗 **FinTrack Integration**: Auto-sync paid lessons to expense tracker
+- 📆 **Google Calendar Sync**: Bidirectional sync with personal Google Calendar
+  - Add lessons in app → Creates calendar event
+  - Add "Ripetizioni <name>" event in Google → Creates lesson in app
+  - Webhook-based real-time updates
+  - Per-user OAuth (each user connects their own calendar)
 
-## 🐳 Quick Start with Docker (Recommended)
+## 🚀 Quick Start (Development)
+
+### Using Docker (Recommended)
 
 1. **Configure environment variables:**
    
-   Copy `.env.example` to `.env` and configure your settings:
    ```bash
    cp .env.example .env
    ```
    
-   Edit `.env` with your values (at minimum set FLASK_SECRET).
+   Edit `.env` with your values:
+   ```dotenv
+   FLASK_ENV=development
+   FLASK_SECRET=your-secret-key
+   GOOGLE_CLIENT_ID=your-google-client-id
+   GOOGLE_CLIENT_SECRET=your-google-client-secret
+   ```
+   
+   > **Note**: For development, Google OAuth will work with `http://localhost`. For production, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 2. **Build and start the container:**
    ```bash
@@ -99,13 +113,49 @@ When you mark a lesson as **paid**, Ripetizioni will automatically send a transa
 
 If FinTrack is not configured, lessons will still work normally without syncing.
 
+## 📦 Production Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete production deployment guide including:
+- HTTPS setup (required for Google OAuth)
+- Nginx reverse proxy configuration
+- Security best practices
+- Backup and restore procedures
+
 ## 🔒 Security Notes
 
-- This is a development scaffold. Before production: enable HTTPS, rotate secrets, use a stronger DB, and consider rate-limiting the token endpoints.
-- API endpoints accept a bearer token in Authorization header or ?token= query param. Keep tokens secret.
-- The app uses Tailwind via the Play CDN for rapid responsive styling (development only). For production, precompile Tailwind or use a stable build.
+- **Development**: Uses `OAUTHLIB_INSECURE_TRANSPORT=1` for local testing
+- **Production**: Requires HTTPS for Google OAuth (automatically enforced)
+- API endpoints use bearer token authentication
+- Passwords are hashed with Werkzeug security
+- Google credentials are encrypted with Fernet (key derived from FLASK_SECRET)
 
-## 📝 Next Steps
+## 🔧 Configuration
 
-- Implement lesson modification via API.
-- Replace placeholder chart.min.js with official Chart.js from a CDN for better visuals.
+### Required Environment Variables
+
+- `FLASK_SECRET`: Secret key for session encryption (generate with `python -c "import secrets; print(secrets.token_hex(32))"`)
+- `GOOGLE_CLIENT_ID`: Google OAuth client ID
+- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
+
+### Optional Environment Variables
+
+- `FLASK_ENV`: `development` or `production` (default: `production`)
+- `FINTRACK_URL`: FinTrack instance URL
+- `FINTRACK_TOKEN`: FinTrack JWT token
+- `FINTRACK_ACCOUNT_ID`: FinTrack account ID
+
+## 📝 Next Steps / Roadmap
+
+- [ ] Email notifications for upcoming lessons
+- [ ] Recurring lesson templates
+- [ ] Multi-currency support
+- [ ] Mobile app (React Native)
+- [ ] SMS reminders integration
+
+## 🐛 Troubleshooting
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for common issues and solutions.
+
+## 📄 License
+
+MIT License - See LICENSE file for details

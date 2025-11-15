@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Ripetizioni Manager</title>
+    <title>Lessons Manager</title>
     <link rel="stylesheet" href="/static/style.css">
     <!-- Tailwind Play CDN for responsive utilities (development only) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,7 +15,7 @@
         <div class="flex justify-between items-center h-16">
           <!-- Logo and Navigation -->
           <div class="flex items-center space-x-8">
-            <a class="text-xl font-bold text-gray-900" href="{{ url_for('calendar_view') }}">Ripetizioni Manager</a>
+            <a class="text-xl font-bold text-gray-900" href="{{ url_for('calendar_view') }}">Lessons Manager</a>
             <div class="flex items-center space-x-1">
               <a class="px-4 py-2 text-sm font-medium transition-colors {% if request.endpoint == 'calendar_view' %}text-blue-700 border-b-2 border-blue-700{% else %}text-gray-600 hover:text-gray-900{% endif %}" 
                  href="{{ url_for('calendar_view') }}">Calendar</a>
@@ -33,7 +33,8 @@
             {% if current_user.is_authenticated %}
               <span class="text-sm text-gray-600">{{ current_user.email }}</span>
               
-              <!-- Google Calendar dropdown menu -->
+              <!-- Google Calendar dropdown menu (only if enabled) -->
+              {% if GOOGLE_CALENDAR_ENABLED %}
               <div class="relative inline-block text-left">
                 <button type="button" onclick="toggleCalendarMenu()" class="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-700 bg-white hover:bg-gray-50 transition">
                   {% if current_user.google_credentials %}
@@ -80,6 +81,7 @@
                   </div>
                 </div>
               </div>
+              {% endif %}
               
               <a class="text-sm px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition" 
                  href="{{ url_for('logout') }}">Logout</a>

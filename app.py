@@ -34,7 +34,15 @@ login_manager.login_view = 'login'
 from models import User, Lesson, Student, Topic, StudentPhoto
 from forms import StudentForm, TopicForm
 from werkzeug.utils import secure_filename
-import google_calendar
+
+# Try to import google_calendar module
+try:
+    import google_calendar
+    GOOGLE_CALENDAR_ENABLED = True
+except Exception as e:
+    print(f'Warning: Google Calendar module not available: {e}')
+    google_calendar = None
+    GOOGLE_CALENDAR_ENABLED = False
 
 UPLOAD_FOLDER = os.path.join('static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -223,6 +231,14 @@ def delete_from_fintrack(lesson_date: datetime, notes: str) -> bool:
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+@app.context_processor
+def inject_globals():
+    """Inject global variables into all templates."""
+    return {
+        'GOOGLE_CALENDAR_ENABLED': GOOGLE_CALENDAR_ENABLED
+    }
 
 
 def require_token(func):
@@ -418,17 +434,18 @@ def lessons_add():
         db.session.add(lesson)
         db.session.commit()
         # Create Google Calendar event for the lesson if authorized
-        try:
-            summary = f"Lesson: {lesson.student_name}"
-            description = f"Lesson for {lesson.student_name}"
-            created = google_calendar.create_event(summary, lesson.start_datetime, lesson.end_datetime, description=description, user=current_user)
-            # store created event id on lesson for future sync/delete
-            if created and isinstance(created, dict) and created.get('id'):
-                lesson.event_id = created.get('id')
-                db.session.add(lesson)
-                db.session.commit()
-        except Exception as e:
-            print('Google Calendar create event error:', e)
+        if GOOGLE_CALENDAR_ENABLED:
+            try:
+                summary = f"Lesson: {lesson.student_name}"
+                description = f"Lesson for {lesson.student_name}"
+                created = google_calendar.create_event(summary, lesson.start_datetime, lesson.end_datetime, description=description, user=current_user)
+                # store created event id on lesson for future sync/delete
+                if created and isinstance(created, dict) and created.get('id'):
+                    lesson.event_id = created.get('id')
+                    db.session.add(lesson)
+                    db.session.commit()
+            except Exception as e:
+                print('Google Calendar create event error:', e)
         flash('Lesson added', 'success')
     else:
         flash('Invalid input', 'danger')
@@ -438,6 +455,9 @@ def lessons_add():
 @app.route('/lessons/<int:lesson_id>/add_to_calendar', methods=['POST'])
 @login_required
 def lessons_add_to_calendar(lesson_id):
+    if not GOOGLE_CALENDAR_ENABLED:
+        flash('Google Calendar integration is not available', 'danger')
+        return redirect(url_for('lessons_view'))
     lesson = Lesson.query.get_or_404(lesson_id)
     try:
         creds = google_calendar.load_credentials()
@@ -460,6 +480,8 @@ def lessons_add_to_calendar(lesson_id):
 @app.route('/debug/create_test_event')
 def debug_create_test_event():
     """Debug route: create a test event using saved credentials and return API response or error."""
+    if not GOOGLE_CALENDAR_ENABLED:
+        return jsonify({'error': 'Google Calendar integration is not available'}), 503
     try:
         creds = google_calendar.load_credentials()
         if not creds:
@@ -824,19 +846,20 @@ def students_add():
         db.session.add(s)
         db.session.commit()
         # Optionally create an event in Google Calendar if authorized and hourly_rate provided
-        try:
-            # This is a simple example: create an all-day event titled "New student: <name>".
-            from datetime import datetime, timedelta
-            creds = google_calendar.load_credentials()
-            if creds:
-                # Create a short event starting now + 1 minute, duration 30 minutes
-                start = datetime.utcnow() + timedelta(minutes=1)
-                end = start + timedelta(minutes=30)
-                summary = f"New student: {s.first_name} {s.last_name or ''}".strip()
-                google_calendar.create_event(summary, start, end, description=s.notes or None)
-        except Exception as e:
-            # Log but don't block user creation
-            print('Google Calendar event error:', e)
+        if GOOGLE_CALENDAR_ENABLED:
+            try:
+                # This is a simple example: create an all-day event titled "New student: <name>".
+                from datetime import datetime, timedelta
+                creds = google_calendar.load_credentials()
+                if creds:
+                    # Create a short event starting now + 1 minute, duration 30 minutes
+                    start = datetime.utcnow() + timedelta(minutes=1)
+                    end = start + timedelta(minutes=30)
+                    summary = f"New student: {s.first_name} {s.last_name or ''}".strip()
+                    google_calendar.create_event(summary, start, end, description=s.notes or None)
+            except Exception as e:
+                # Log but don't block user creation
+                print('Google Calendar event error:', e)
         flash('Student created', 'success')
         return redirect(url_for('students_list'))
     return render_template('student_edit.html', form=form)
@@ -845,6 +868,9 @@ def students_add():
 @app.route('/authorize_calendar')
 @login_required
 def authorize_calendar():
+    if not GOOGLE_CALENDAR_ENABLED:
+        flash('Google Calendar integration is not available', 'danger')
+        return redirect(url_for('students_list'))
     # Redirect user to Google's OAuth consent screen
     redirect_uri = url_for('oauth2callback', _external=True)
     try:
@@ -857,6 +883,9 @@ def authorize_calendar():
 
 @app.route('/oauth2callback')
 def oauth2callback():
+    if not GOOGLE_CALENDAR_ENABLED:
+        flash('Google Calendar integration is not available', 'danger')
+        return redirect(url_for('students_list'))
     # Handle OAuth callback and exchange code for token
     try:
         redirect_uri = url_for('oauth2callback', _external=True)
@@ -895,6 +924,9 @@ def oauth2callback():
 @app.route('/disconnect_calendar')
 @login_required
 def disconnect_calendar():
+    if not GOOGLE_CALENDAR_ENABLED:
+        flash('Google Calendar integration is not available', 'danger')
+        return redirect(url_for('calendar_view'))
     try:
         # Stop webhook if active
         if current_user.google_channel:
@@ -921,6 +953,8 @@ def google_webhook():
     When calendar changes, Google sends POST here.
     We sync changed events to our Lesson table.
     """
+    if not GOOGLE_CALENDAR_ENABLED:
+        return '', 503
     # Verify headers sent by Google
     channel_id = request.headers.get('X-Goog-Channel-ID')
     resource_state = request.headers.get('X-Goog-Resource-State')
@@ -964,6 +998,9 @@ def google_webhook():
 @login_required
 def sync_calendar_manual():
     """Manual sync trigger for testing/debugging."""
+    if not GOOGLE_CALENDAR_ENABLED:
+        flash('Google Calendar integration is not available', 'danger')
+        return redirect(url_for('calendar_view'))
     if not current_user.google_credentials:
         flash('Google Calendar not connected', 'warning')
         return redirect(url_for('calendar_view'))
@@ -1122,6 +1159,12 @@ def api_delete_lesson(lesson_id):
 
 
 if __name__ == '__main__':
+    # Enable insecure transport only in development (localhost)
+    # In production, HTTPS is required for OAuth
+    if os.environ.get('FLASK_ENV') == 'development':
+        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        print('WARNING: Running in development mode with OAUTHLIB_INSECURE_TRANSPORT=1')
+    
     # ensure database schema is up-to-date inside application context
     with app.app_context():
         # create any missing tables (won't alter existing tables)
@@ -1146,7 +1189,10 @@ if __name__ == '__main__':
                 pass
     
     # Start webhook renewal scheduler
-    import webhook_scheduler
-    webhook_scheduler.setup_scheduler(app)
+    if GOOGLE_CALENDAR_ENABLED:
+        import webhook_scheduler
+        webhook_scheduler.setup_scheduler(app)
 
-    app.run(debug=True, host='0.0.0.0')
+    # Use debug mode only in development
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    app.run(debug=debug_mode, host='0.0.0.0')

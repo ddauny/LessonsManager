@@ -1,6 +1,37 @@
+# Environment variables (contains secrets)
 .env
+
+# Python virtual environment
 .venv
-/static/uploads/
+venv/
+env/
+
+# User uploaded files
+/static/uploads/*
+!static/uploads/.gitkeep
+
+# Database and credentials
+instance/
 instance/ripetizioni.db
-/instance
-GOOGLE_SYNC_SETUP.md
+instance/credentials.json
+instance/google_token.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
