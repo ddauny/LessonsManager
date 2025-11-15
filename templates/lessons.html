@@ -72,10 +72,6 @@
         <div class="overflow-x-auto">
           <form method="post" action="{{ url_for('lessons_delete_multiple') }}" id="deleteMultipleForm">
           <table class="w-full text-sm">
-          </div>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
             <thead class="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th class="px-6 py-3 text-left selection-header" style="display:none">
@@ -164,6 +160,7 @@
                 </tr>
                 <!-- Edit form row (hidden by default) -->
                 <tr id="edit-form-{{ l.id }}" class="hidden bg-gray-50">
+                  <td class="px-6 py-4 selection-cell" style="display:none"></td>
                   <td colspan="6" class="px-6 py-4">
                     <form method="post" action="{{ url_for('lessons_edit', lesson_id=l.id) }}" class="grid grid-cols-1 md:grid-cols-5 gap-3">
                       <div>

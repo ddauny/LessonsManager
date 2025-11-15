@@ -1170,7 +1170,19 @@ def student_update_rate(student_id):
             student.hourly_rate = float(hourly_rate)
         else:
             student.hourly_rate = None
+        
+        # Update all unpaid lessons for this student to use the new rate
+        student_full_name = f"{student.first_name} {student.last_name or ''}".strip()
+        unpaid_lessons = Lesson.query.filter_by(student_name=student_full_name, paid=False).all()
+        
+        for lesson in unpaid_lessons:
+            # Only update if lesson doesn't have a custom price set
+            if lesson.price is None or lesson.price == 0:
+                # Price will be recalculated automatically via get_price() method
+                pass
+        
         db.session.commit()
+        flash(f'Rate updated. {len(unpaid_lessons)} unpaid lesson(s) will use the new rate.', 'success')
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 400
