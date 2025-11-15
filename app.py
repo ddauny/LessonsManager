@@ -954,7 +954,8 @@ def authorize_calendar():
         flash('Google Calendar integration is not available', 'danger')
         return redirect(url_for('students_list'))
     # Redirect user to Google's OAuth consent screen
-    redirect_uri = url_for('oauth2callback', _external=True)
+    redirect_uri = url_for('oauth2callback', _external=True, _scheme='https')
+    print(f"DEBUG: Generated redirect_uri: {redirect_uri}")
     try:
         auth_url = google_calendar.get_authorize_url(redirect_uri)
         return redirect(auth_url)
@@ -970,8 +971,10 @@ def oauth2callback():
         return redirect(url_for('students_list'))
     # Handle OAuth callback and exchange code for token
     try:
-        redirect_uri = url_for('oauth2callback', _external=True)
+        redirect_uri = url_for('oauth2callback', _external=True, _scheme='https')
+        print(f"DEBUG: Callback redirect_uri: {redirect_uri}")
         full_url = request.url
+        print(f"DEBUG: Full callback URL: {full_url}")
         creds = google_calendar.exchange_code_for_token(full_url, redirect_uri)
         # If user logged in, save credentials to their account
         if hasattr(current_user, 'is_authenticated') and current_user.is_authenticated:
